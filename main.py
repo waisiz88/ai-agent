@@ -7,6 +7,7 @@ from functions.get_files_info import get_files_info, schema_get_files_info
 from functions.get_file_content import get_file_content, schema_get_file_content
 from functions.run_python import run_python_file, schema_run_python_file
 from functions.write_file import write_file_secure, schema_write_file
+from functions.git_tools import git_commit_push, schema_git_commit_push
 
 system_prompt = """
 You are a helpful AI coding agent.
@@ -53,7 +54,8 @@ available_functions = types.Tool(
         schema_get_files_info,
         schema_get_file_content,
         schema_run_python_file,
-        schema_write_file
+        schema_write_file,
+        schema_git_commit_push,
     ]
 )
 
@@ -78,6 +80,7 @@ def call_function(function_call_part, verbose=False):
         "get_file_content": get_file_content,
         "run_python_file": run_python_file,
         "write_file": write_file_secure,
+        "git_commit_push": git_commit_push,
     }
     func = function_map.get(function_name)
     if not func:
@@ -123,6 +126,7 @@ try:
                     messages.append(candidate.content)
         # Check for function calls in the response
         if hasattr(response, 'function_calls') and response.function_calls:
+            all_parts = []
             for function_call_part in response.function_calls:
                 function_call_result = call_function(function_call_part, verbose=verbose)
                 # Check for function response in the result
@@ -130,9 +134,10 @@ try:
                     raise RuntimeError("Fatal: No function response in tool call result.")
                 if verbose:
                     print(f"-> {function_call_result.parts[0].function_response.response}")
-                # Add the tool response to the messages list
-                messages.append(function_call_result)
-            # Continue the loop for the next step
+                all_parts.append(function_call_result.parts[0])
+            # Create a single tool message with all parts
+            tool_message = types.Content(role="tool", parts=all_parts)
+            messages.append(tool_message)
             continue
         # If we get a text response, print and break
         if hasattr(response, 'text') and response.text:
